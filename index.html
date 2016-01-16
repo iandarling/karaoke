@@ -1,0 +1,126 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.min.js"></script>
+<script type="text/javascript">
+(function(scope) {
+    var spreadsheet = 'https://spreadsheets.google.com/feeds/list/1jG5r_8t6-54dMdY1S781bZ8sQimCbPxh--LylQY7aZg/od6/public/values?alt=json';
+
+    var httpRequest = new XMLHttpRequest();
+    var data;
+    var status$, results$, search$, content$;
+    var resultsTemplate = _.template([
+        '<table class="table table-condensed table-striped table-responsive"><tr><th>Disk</th><th>Track</th><th>Artist</th><th>Song</th></tr>',
+        '<% for(var i = 0 ; i < data.length ; i++) { %>',
+        '    <tr><td><%= data[i].disk %></td><td><%= data[i].track %></td><td><%= data[i].artist %></td><td><%= data[i].song %></td></tr>',
+        '<% } %></table>'].join('\n'));
+
+    function fail(message) {
+        status$.innerHTML = message;
+        content$.classList.add('panel-danger');
+    }
+
+    function createIndex(song, artist) {
+        // TODO canonicalise words containing punctuation, e.g. R.E.M. can be found as REM
+        return (song + ' ' + artist).split(' ');
+    }
+
+    function index(songs) {
+        status$.innerHTML = String(songs.length) + ' songs available';
+        data = _(songs).map(function(song) {
+            // Build up an array from each song title with the words we can match on
+            return {
+                index: createIndex(song.gsx$song.$t, song.gsx$artist.$t),
+                disk: song.gsx$disk.$t,
+                track: song.gsx$track.$t,
+                song: song.gsx$song.$t,
+                artist: song.gsx$artist.$t
+            };
+        });
+    }
+
+    function readKaraokeFromSpreadsheet() {
+        if (httpRequest.readyState === XMLHttpRequest.DONE) {
+            if (httpRequest.status === 200) {
+                var rawData = JSON.parse(httpRequest.responseText);
+                index(rawData.feed.entry);
+            } else {
+                fail('Problem loading songs');
+            }
+        }
+    }
+
+    function init() {
+        status$ = document.getElementById('status');
+        search$ = document.getElementById('search');
+        results$ = document.getElementById('results');
+        content$ = document.getElementById('content');
+
+        if (!httpRequest) {
+            fail('Browser doesn\'t support XHR');
+        }
+        else {
+            httpRequest.onreadystatechange = readKaraokeFromSpreadsheet;
+            httpRequest.open('GET', spreadsheet);
+            httpRequest.send();
+        }        
+    }
+
+    function search(criteria) {
+        return data.filter(function(song) {
+            return _.contains(song.index, criteria);
+        }).valueOf();
+    }
+
+    function formatResults(results) {
+        return resultsTemplate({ data: results });
+    }
+
+    function updateResults() {
+        var criteria = search$.value;
+
+        // Heuristic - nothing interesting needs to happen until we have three characters.
+        if(criteria.length < 3) {
+            results$.innerHTML = '';
+            return;
+        }
+
+        var results = search(criteria);
+
+        if(results.length === 0) {
+            results$.innerHTML = 'No songs found for '+ criteria;
+            return;
+        }
+
+        var sortedResults = _.sortByAll(results, ['artist', 'song']);
+
+        results$.innerHTML = formatResults(sortedResults);
+    }
+
+    scope.karaoke = {
+        init: init,
+        updateResults: updateResults
+    };
+}(window));
+</script>
+</head>
+
+<body onload="window.karaoke.init();">
+<div class="panel panel-default container-fluid" id="content">
+    <div class="panel-heading row">
+        <div class="col-xs-4"><h3 class="panel-title">Karaoke</h3></div>
+        <div class="col=xs-8"><span class="pull-right" id="status">Retrieving Songs...</span></div>
+    </div>
+    <div class="panel-body">
+        <div class="input-group">
+            <span class="input-group-addon">Search: </span>
+            <input class="form-control" id="search" type="text" placeholder="Enter song and/or artist" oninput="karaoke.updateResults();">
+            </input>
+        </div>
+    </div>
+    <div id="results"><div>
+</div>
+</body>
+</html>
