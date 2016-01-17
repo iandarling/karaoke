@@ -24,7 +24,7 @@
 
     function createIndex(song, artist) {
         // TODO canonicalise words containing punctuation, e.g. R.E.M. can be found as REM
-        return (song + ' ' + artist).split(' ');
+        return _.words((song + ' ' + artist).toLowerCase());
     }
 
     function index(songs) {
@@ -69,8 +69,13 @@
     }
 
     function search(criteria) {
+        var words = _.words(criteria.toLowerCase());
         return data.filter(function(song) {
-            return _.contains(song.index, criteria);
+            return _.all(words, function(word) {
+                return _.some(song.index, function(indexWord) {
+                    return _.startsWith(indexWord, word);
+                });
+            });
         }).valueOf();
     }
 
